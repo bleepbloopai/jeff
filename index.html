@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Jeff Clicker</title>
+  <style>
+    :root { --bg:#0b0d12; --panel:#151922; --line:#2a3040; --text:#f7f4ef; --muted:#98a1b2; --gold:#f4b860; }
+    * { box-sizing:border-box; }
+    body { margin:0; min-height:100vh; color:var(--text); background:radial-gradient(circle at 50% 15%,#222838 0,#0b0d12 48%); font:15px/1.4 system-ui,-apple-system,Segoe UI,sans-serif; }
+    .game { width:min(820px,calc(100% - 28px)); margin:0 auto; padding:28px 0 40px; text-align:center; }
+    h1 { margin:0; font-size:clamp(26px,5vw,42px); letter-spacing:-.06em; }
+    .count { margin:22px 0 3px; font-size:clamp(44px,9vw,76px); font-weight:850; line-height:1; letter-spacing:-.07em; font-variant-numeric:tabular-nums; }
+    .rate { color:var(--muted); font-size:13px; }
+    .cookie { display:block; width:min(310px,72vw); aspect-ratio:1; margin:27px auto 15px; padding:0; border:0; border-radius:50%; background:none; cursor:pointer; transition:transform .1s ease; }
+    .cookie:hover { transform:scale(1.035); }
+    .cookie:active { transform:scale(.94); }
+    .cookie img { display:block; width:100%; height:100%; object-fit:contain; border-radius:50%; user-select:none; -webkit-user-drag:none; }
+    .upgrades { width:min(560px,100%); margin:28px auto 0; padding:19px; border:1px solid var(--line); border-radius:20px; background:rgba(21,25,34,.85); text-align:left; }
+    .upgrades h2 { margin:0 0 13px; font-size:17px; letter-spacing:-.03em; }
+    .upgrade-list { display:grid; gap:9px; }
+    .upgrade { display:flex; align-items:center; gap:12px; width:100%; padding:12px 13px; color:var(--text); border:1px solid var(--line); border-radius:13px; background:#1d2330; text-align:left; cursor:pointer; transition:background .15s,border-color .15s; }
+    .upgrade:hover:not(:disabled) { border-color:var(--gold); background:#272d39; }
+    .upgrade:disabled { cursor:not-allowed; opacity:.42; }
+    .icon { display:grid; place-items:center; width:34px; height:34px; flex:none; border-radius:10px; color:#21170d; background:var(--gold); font-weight:800; }
+    .copy { flex:1; min-width:0; }
+    .name { display:block; font-weight:750; }
+    .desc { display:block; color:var(--muted); font-size:12px; }
+    .cost { color:#ffdf9b; font-size:12px; font-weight:750; white-space:nowrap; }
+  </style>
+</head>
+<body>
+  <main class="game">
+    <h1>Jeff Clicker</h1>
+    <div class="count" id="count">0</div>
+    <div class="rate"><span id="perSecond">0</span> Jeffs per second</div>
+
+    <button class="cookie" id="cookie" aria-label="Click Jeff">
+      <img src="jeff.png" alt="Jeff cookie">
+    </button>
+
+    <section class="upgrades">
+      <h2>Upgrades</h2>
+      <div class="upgrade-list">
+        <button class="upgrade" data-upgrade="cursor">
+          <span class="icon">✦</span><span class="copy"><span class="name">Helpful cursor</span><span class="desc">+1 Jeff per second</span></span><span class="cost" id="cursorCost">15</span>
+        </button>
+        <button class="upgrade" data-upgrade="oven">
+          <span class="icon">♨</span><span class="copy"><span class="name">Jeff oven</span><span class="desc">+8 Jeffs per second</span></span><span class="cost" id="ovenCost">120</span>
+        </button>
+        <button class="upgrade" data-upgrade="factory">
+          <span class="icon">▦</span><span class="copy"><span class="name">Jeff factory</span><span class="desc">+45 Jeffs per second</span></span><span class="cost" id="factoryCost">850</span>
+        </button>
+      </div>
+    </section>
+  </main>
+
+  <script>
+    (() => {
+      const saveKey = 'jeff-clicker-save-v2';
+      const upgrades = {
+        cursor: { base:15, income:1, owned:0, costId:'cursorCost' },
+        oven: { base:120, income:8, owned:0, costId:'ovenCost' },
+        factory: { base:850, income:45, owned:0, costId:'factoryCost' }
+      };
+      let state = { jeffs:0, ...load() };
+      Object.keys(upgrades).forEach(key => upgrades[key].owned = state[key + 'Owned'] || 0);
+      const $ = id => document.getElementById(id);
+      const format = number => Math.floor(number).toLocaleString();
+      const income = () => Object.values(upgrades).reduce((total, upgrade) => total + upgrade.income * upgrade.owned, 0);
+      const cost = upgrade => Math.ceil(upgrade.base * Math.pow(1.18, upgrade.owned));
+      function load() { try { return JSON.parse(localStorage.getItem(saveKey)) || {}; } catch { return {}; } }
+      function save() {
+        const data = { ...state };
+        Object.keys(upgrades).forEach(key => data[key + 'Owned'] = upgrades[key].owned);
+        localStorage.setItem(saveKey, JSON.stringify(data));
+      }
+      function render() {
+        $('count').textContent = format(state.jeffs);
+        $('perSecond').textContent = format(income());
+        Object.entries(upgrades).forEach(([key, upgrade]) => {
+          const button = document.querySelector(`[data-upgrade="${key}"]`);
+          button.disabled = state.jeffs < cost(upgrade);
+          $(upgrade.costId).textContent = format(cost(upgrade)) + ' · ' + upgrade.owned;
+        });
+      }
+      $('cookie').addEventListener('click', () => { state.jeffs += 1; render(); save(); });
+      document.querySelectorAll('.upgrade').forEach(button => button.addEventListener('click', () => {
+        const upgrade = upgrades[button.dataset.upgrade];
+        const price = cost(upgrade);
+        if (state.jeffs < price) return;
+        state.jeffs -= price;
+        upgrade.owned += 1;
+        render();
+        save();
+      }));
+      setInterval(() => { const earned = income() / 10; if (!earned) return; state.jeffs += earned; render(); }, 100);
+      setInterval(save, 10000);
+      render();
+    })();
+  </script>
+</body>
+</html>
